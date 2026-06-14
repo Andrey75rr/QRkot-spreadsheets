@@ -15,11 +15,14 @@ from app.core.config import settings
 from app.core.db import get_async_session
 from app.models.user import User
 
+MIN_PASSWORD_LENGTH = 3
+
 
 bearer_transport = BearerTransport(tokenUrl="/auth/jwt/login")
 
 
 def get_jwt_strategy() -> JWTStrategy:
+    """Возвращает стратегию JWT для аутентификации."""
     return JWTStrategy(
         secret=settings.auth_secret,
         lifetime_seconds=settings.auth_token_lifetime_seconds,
@@ -34,11 +37,14 @@ auth_backend = AuthenticationBackend(
 
 
 class UserManager(IntegerIDMixin, BaseUserManager[User, int]):
+    """Менеджер пользователей."""
+
     reset_password_token_secret = settings.auth_secret
     verification_token_secret = settings.auth_secret
 
     async def validate_password(self, password: str, user: User) -> None:
-        if len(password) < 3:
+        """Валидация пароля."""
+        if len(password) < MIN_PASSWORD_LENGTH:
             raise InvalidPasswordException(
                 reason="REGISTER_INVALID_PASSWORD"
             )
@@ -47,24 +53,29 @@ class UserManager(IntegerIDMixin, BaseUserManager[User, int]):
     async def on_after_register(
             self, user: User, request: Optional[Request] = None
     ):
+        """Действия после регистрации."""
         print(f"Пользователь {user.email} зарегистрирован")
 
     async def on_after_forgot_password(
         self, user: User, token: str, request: Optional[Request] = None
     ):
+        """Действия после запроса сброса пароля."""
         print(f"Пользователь {user.email} забыл пароль. Токен: {token}")
 
     async def on_after_request_verify(
         self, user: User, token: str, request: Optional[Request] = None
     ):
+        """Действия после запроса верификации."""
         print(f"Подтверждение email для {user.email}. Токен: {token}")
 
 
 async def get_user_db(session: AsyncSession = Depends(get_async_session)):
+    """Возвращает базу данных пользователей."""
     yield SQLAlchemyUserDatabase(session, User)
 
 
 async def get_user_manager(user_db=Depends(get_user_db)):
+    """Возвращает менеджера пользователей."""
     yield UserManager(user_db)
 
 

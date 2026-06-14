@@ -1,3 +1,5 @@
+from http import HTTPStatus
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,7 +29,7 @@ async def get_report(
 
     if not projects:
         raise HTTPException(
-            status_code=404,
+            status_code=HTTPStatus.NOT_FOUND,
             detail="Нет закрытых проектов для формирования отчёта"
         )
 
@@ -35,6 +37,6 @@ async def get_report(
         return await create_simple_report(projects, yandex_client)
     except Exception as e:
         raise HTTPException(
-            status_code=500,
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             detail=f"Ошибка при создании отчёта: {str(e)}"
         )

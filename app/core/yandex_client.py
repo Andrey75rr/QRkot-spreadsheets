@@ -1,7 +1,16 @@
+from http import HTTPStatus
 from typing import Optional
 
 import httpx
 from fastapi import HTTPException, status
+
+from app.core.config import settings
+
+HTTPX_TIMEOUT = 30.0
+DISK_PREFIX = "disk:/"
+UPLOAD_ENDPOINT = "/resources/upload"
+PUBLISH_ENDPOINT = "/resources/publish"
+RESOURCES_ENDPOINT = "/resources"
 
 
 class YandexDiskClient:
@@ -10,13 +19,13 @@ class YandexDiskClient:
     def __init__(self, token: str):
         """Инициализация клиента с OAuth-токеном."""
         self.token = token
-        self.base_url = "https://cloud-api.yandex.net/v1/disk"
+        self.base_url = settings.yandex_disk_api_url
         self.headers = {"Authorization": f"OAuth {token}"}
         self._client: Optional[httpx.AsyncClient] = None
 
     async def __aenter__(self):
         """Открыть асинхронную сессию."""
-        self._client = httpx.AsyncClient(timeout=30.0)
+        self._client = httpx.AsyncClient(timeout=HTTPX_TIMEOUT)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -25,15 +34,18 @@ class YandexDiskClient:
             await self._client.aclose()
 
     async def create_excel_file(
-            self, title: str, folder: str = "QRKot Reports"
+            self, title: str, folder: str = None
     ) -> tuple[str, str]:
         """Получить ссылку для загрузки файла и путь к нему на Диске."""
+        if folder is None:
+            folder = settings.yandex_disk_folder
+
         await self._create_folder(folder)
 
-        file_path = f"disk:/{folder}/{title}.xlsx"
+        file_path = f"{DISK_PREFIX}{folder}/{title}.xlsx"
 
         response = await self._client.get(
-            f"{self.base_url}/resources/upload",
+            f"{self.base_url}{UPLOAD_ENDPOINT}",
             headers=self.headers,
             params={"path": file_path, "overwrite": "true"}
         )
@@ -64,14 +76,14 @@ class YandexDiskClient:
     async def publish_file(self, file_path: str) -> str:
         """Сделать файл публичным и вернуть ссылку на него."""
         response = await self._client.put(
-            f"{self.base_url}/resources/publish",
+            f"{self.base_url}{PUBLISH_ENDPOINT}",
             headers=self.headers,
             params={"path": file_path}
         )
         response.raise_for_status()
 
         response = await self._client.get(
-            f"{self.base_url}/resources",
+            f"{self.base_url}{RESOURCES_ENDPOINT}",
             headers=self.headers,
             params={"path": file_path}
         )
@@ -92,19 +104,17 @@ class YandexDiskClient:
         """Создать папку на Диске, если её нет."""
         try:
             await self._client.put(
-                f"{self.base_url}/resources",
+                f"{self.base_url}{RESOURCES_ENDPOINT}",
                 headers=self.headers,
-                params={"path": f"disk:/{folder}"}
+                params={"path": f"{DISK_PREFIX}{folder}"}
             )
         except httpx.HTTPStatusError as e:
-            if e.response.status_code != 409:
+            if e.response.status_code != HTTPStatus.CONFLICT:
                 raise
 
 
 async def get_yandex_client():
     """Dependency для получения клиента Яндекс Диска."""
-    from app.core.config import settings
-
     if settings.yandex_disk_token is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     auth_token_lifetime_seconds: int = 3600
     yandex_disk_token: Optional[str] = None
     report_format: str = "%Y/%m/%d %H:%M:%S"
+    yandex_disk_api_url: str = "https://cloud-api.yandex.net/v1/disk"
+    yandex_disk_folder: str = "QRKot Reports"
 
     class Config:
         """Конфигурация загрузки переменных из .env файла."""
